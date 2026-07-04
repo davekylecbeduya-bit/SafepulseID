@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Safepulse ID — Live Device Simulation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+  :root{
+    --ink:#10182B; --ink-soft:#2A3352; --paper:#F6F3EC; --panel:#FCFAF5;
+    --line:#DBD5C6; --alert:#E8452F; --alert-dim:#F6D9D2; --pending:#F2A93B;
+    --pending-dim:#FBEBCD; --safe:#1F9E89; --safe-dim:#D6EEE9; --gold:#C9A24B;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;min-height:100vh;}
+  ::selection{background:var(--alert);color:#fff;}
+  .shell{max-width:1180px;margin:0 auto;padding:36px 24px 80px;}
+
+  header.top{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:22px;margin-bottom:20px;}
+  .eyebrow{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);opacity:.7;margin-bottom:8px;}
+  h1.title{font-family:'Space Grotesk',sans-serif;font-size:clamp(28px,4vw,40px);font-weight:700;margin:0;letter-spacing:-.01em;}
+  h1.title span{color:var(--alert);}
+  .subtitle{font-size:14px;color:var(--ink-soft);margin-top:6px;max-width:560px;line-height:1.5;}
+  .tabs{display:flex;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:4px;}
+  .tab-btn{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13px;border:none;background:transparent;padding:10px 20px;border-radius:999px;cursor:pointer;color:var(--ink-soft);transition:.2s;}
+  .tab-btn.active{background:var(--ink);color:var(--paper);}
+
+  .notice{
+    background:#FBEBCD;border:1px solid #E9C878;color:#7A5A0B;font-size:12.5px;line-height:1.6;
+    border-radius:10px;padding:12px 16px;margin-bottom:26px;
+  }
+  .notice b{font-weight:600;}
+
+  .view{display:none;animation:fade .35s ease;}
+  .view.active{display:block;}
+  @keyframes fade{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+
+  .student-layout{display:grid;grid-template-columns:340px 1fr;gap:40px;}
+  @media (max-width:820px){.student-layout{grid-template-columns:1fr;}}
+
+  .card-stage{display:flex;flex-direction:column;align-items:center;}
+  .lanyard{width:6px;height:34px;background:repeating-linear-gradient(45deg,var(--ink),var(--ink) 6px,var(--gold) 6px,var(--gold) 12px);border-radius:3px;margin-bottom:-6px;}
+  .idcard{width:300px;border-radius:18px;background:linear-gradient(160deg,var(--ink) 0%,#1B2547 65%,#212C52 100%);color:#fff;padding:20px 20px 24px;position:relative;overflow:hidden;box-shadow:0 18px 40px -12px rgba(16,24,43,.45);border:1px solid #2A3459;transition:box-shadow .3s ease;}
+  .idcard::before{content:"";position:absolute;top:0;right:0;width:130px;height:130px;background:radial-gradient(circle,rgba(201,162,75,.18),transparent 70%);}
+  .idcard.triggered{box-shadow:0 0 0 3px var(--alert),0 18px 50px -10px rgba(232,69,47,.55);}
+  .idcard-top{display:flex;justify-content:space-between;align-items:center;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.08em;opacity:.75;}
+  .idcard-status-dot{width:7px;height:7px;border-radius:50%;background:var(--safe);display:inline-block;margin-right:6px;box-shadow:0 0 0 3px rgba(31,158,137,.25);}
+  .idcard.triggered .idcard-status-dot{background:var(--alert);box-shadow:0 0 0 3px rgba(232,69,47,.3);animation:pulse-dot 1s infinite;}
+  @keyframes pulse-dot{0%,100%{opacity:1;}50%{opacity:.4;}}
+  .idcard-photo{width:64px;height:64px;border-radius:12px;margin:18px 0 12px;background:linear-gradient(135deg,#3A4470,#232C4F);display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk';font-weight:700;font-size:22px;color:var(--gold);border:1px solid rgba(255,255,255,.12);}
+  .idcard-name{font-family:'Space Grotesk';font-weight:700;font-size:19px;line-height:1.15;}
+  .idcard-meta{font-size:12px;opacity:.65;margin-top:3px;}
+  .idcard-id{font-family:'JetBrains Mono';font-size:11px;opacity:.55;margin-top:14px;letter-spacing:.05em;}
+
+  .panic-wrap{margin-top:18px;display:flex;flex-direction:column;align-items:center;}
+  .panic-btn{--p:0;position:relative;width:92px;height:92px;border-radius:50%;background:radial-gradient(circle at 50% 40%, #fff1 0%, transparent 60%),conic-gradient(var(--alert) calc(var(--p)*1%), rgba(255,255,255,.14) 0);display:flex;align-items:center;justify-content:center;cursor:pointer;user-select:none;touch-action:none;transition:transform .15s ease;}
+  .panic-btn:active{transform:scale(.97);}
+  .panic-btn .core{width:72px;height:72px;border-radius:50%;background:linear-gradient(160deg,var(--alert),#C93A26);display:flex;align-items:center;justify-content:center;flex-direction:column;color:#fff;font-family:'Space Grotesk';font-weight:700;font-size:11px;letter-spacing:.06em;box-shadow:inset 0 2px 6px rgba(255,255,255,.25), 0 6px 14px rgba(232,69,47,.4);}
+  .panic-btn .core svg{width:22px;height:22px;margin-bottom:3px;}
+  .panic-hint{font-size:11px;color:rgba(255,255,255,.55);margin-top:12px;text-align:center;max-width:220px;}
+
+  .stop-btn{
+    margin-top:14px;background:#fff;color:var(--alert);border:none;font-family:'Space Grotesk';
+    font-weight:700;font-size:12px;padding:11px 22px;border-radius:999px;cursor:pointer;
+    display:none;align-items:center;gap:8px;box-shadow:0 6px 16px rgba(0,0,0,.15);
+  }
+  .stop-btn.show{display:inline-flex;}
+  .stop-btn .rdot{width:8px;height:8px;border-radius:50%;background:var(--alert);animation:pulse-dot .9s infinite;}
+
+  .reset-link{margin-top:16px;background:none;border:none;color:var(--ink-soft);font-size:12px;text-decoration:underline;cursor:pointer;font-family:'Inter';}
+
+  .status-col{display:flex;flex-direction:column;gap:18px;}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px 22px;}
+  .panel h3{font-family:'Space Grotesk';font-size:14px;margin:0 0 14px;display:flex;align-items:center;gap:8px;}
+  .badge{font-family:'JetBrains Mono';font-size:10px;padding:3px 9px;border-radius:999px;text-transform:uppercase;letter-spacing:.06em;font-weight:500;}
+  .badge.idle{background:#EDEAE0;color:var(--ink-soft);}
+  .badge.new{background:var(--alert-dim);color:var(--alert);}
+  .badge.progress{background:var(--pending-dim);color:#96660E;}
+  .badge.resolved{background:var(--safe-dim);color:var(--safe);}
+  .badge.err{background:#F6D9D2;color:#8A2A18;}
+
+  .empty-note{font-size:13px;color:var(--ink-soft);opacity:.75;line-height:1.6;}
+  .err-note{font-size:12.5px;color:#8A2A18;background:var(--alert-dim);border-radius:8px;padding:10px 12px;line-height:1.5;margin-top:6px;}
+
+  .contact-row{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px;}
+  .contact-row:last-child{border-bottom:none;}
+  .contact-name{display:flex;align-items:center;gap:9px;}
+  .contact-dot{width:8px;height:8px;border-radius:50%;background:var(--line);}
+  .contact-dot.sent{background:var(--safe);}
+  .contact-check{font-size:12px;color:var(--safe);opacity:0;transition:opacity .3s;font-family:'JetBrains Mono';}
+  .contact-check.show{opacity:1;}
+
+  .waveform{display:flex;align-items:center;gap:2px;height:40px;margin:6px 0 10px;}
+  .waveform .bar{width:3px;background:var(--alert);border-radius:2px;height:3px;transition:height .06s ease;}
+  .rec-label{font-family:'JetBrains Mono';font-size:11px;color:var(--alert);display:flex;align-items:center;gap:6px;}
+  .rec-dot{width:7px;height:7px;border-radius:50%;background:var(--alert);animation:pulse-dot .9s infinite;}
+
+  .meta-line{font-size:12px;color:var(--ink-soft);display:flex;justify-content:space-between;padding:5px 0;font-family:'JetBrains Mono';}
+
+  .admin-layout{display:grid;grid-template-columns:340px 1fr;gap:24px;align-items:start;}
+  @media (max-width:900px){.admin-layout{grid-template-columns:1fr;}}
+  .feed{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;}
+  .feed-head{padding:16px 18px;border-bottom:1px solid var(--line);font-family:'Space Grotesk';font-size:14px;font-weight:600;display:flex;justify-content:space-between;align-items:center;}
+  .feed-count{font-family:'JetBrains Mono';font-size:11px;color:var(--ink-soft);}
+  .feed-list{max-height:560px;overflow-y:auto;}
+  .feed-item{padding:14px 18px;border-bottom:1px solid var(--line);cursor:pointer;transition:.15s;display:flex;flex-direction:column;gap:5px;}
+  .feed-item:hover{background:#F1EDE2;}
+  .feed-item.selected{background:#EAE5D6;}
+  .feed-item-top{display:flex;justify-content:space-between;align-items:center;}
+  .feed-item-name{font-weight:600;font-size:13px;}
+  .feed-item-time{font-family:'JetBrains Mono';font-size:10.5px;color:var(--ink-soft);}
+  .feed-empty{padding:40px 22px;text-align:center;font-size:13px;color:var(--ink-soft);line-height:1.6;}
+
+  .detail{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:26px;min-height:420px;}
+  .detail-empty{display:flex;align-items:center;justify-content:center;height:400px;color:var(--ink-soft);font-size:13px;text-align:center;padding:0 40px;line-height:1.6;}
+  .detail-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap;gap:14px;}
+  .detail-name{font-family:'Space Grotesk';font-size:22px;font-weight:700;}
+  .detail-sub{font-size:12.5px;color:var(--ink-soft);margin-top:3px;}
+  .status-actions{display:flex;gap:8px;margin-top:6px;}
+  .status-btn{font-family:'Inter';font-size:12px;font-weight:600;padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:#fff;cursor:pointer;transition:.15s;color:var(--ink);}
+  .status-btn.active-pending{background:var(--pending);border-color:var(--pending);color:#fff;}
+  .status-btn.active-resolved{background:var(--safe);border-color:var(--safe);color:#fff;}
+  .grid-two{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px;}
+  @media (max-width:560px){.grid-two{grid-template-columns:1fr;}}
+  .info-block{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px;}
+  .info-block h4{margin:0 0 10px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);font-family:'JetBrains Mono';font-weight:500;}
+  #mapbox{height:170px;border-radius:8px;overflow:hidden;}
+  .coords{font-family:'JetBrains Mono';font-size:11px;color:var(--ink-soft);margin-top:8px;}
+  .contact-chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;background:var(--safe-dim);color:var(--safe);padding:5px 10px;border-radius:999px;margin:3px 4px 0 0;font-weight:500;}
+  audio{width:100%;margin-top:4px;}
+  .footnote{font-size:11px;color:var(--ink-soft);opacity:.6;margin-top:26px;line-height:1.6;border-top:1px solid var(--line);padding-top:14px;}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <header class="top">
+    <div>
+      <div class="eyebrow">Safepulse ID · Live Device Simulation</div>
+      <h1 class="title">Safepulse<span>ID</span></h1>
+      <p class="subtitle">This version uses your actual device microphone and GPS. Your browser will ask permission before recording audio or reading your location.</p>
+    </div>
+    <div class="tabs">
+      <button class="tab-btn active" data-view="student">Student Device</button>
+      <button class="tab-btn" data-view="admin">Response Dashboard</button>
+    </div>
+  </header>
+
+  <div class="notice">
+    <b>Before you start:</b> for the microphone and GPS to work, open this file over <b>https://</b> or <b>localhost</b> (not directly from a file explorer) — most mobile browsers block mic/location access on plain local files. The easiest way: upload it to a private GitHub Gist / Netlify drop, or run a quick local server. Nothing recorded here leaves your device — everything runs and stays in this browser tab.
+  </div>
+
+  <!-- ================= STUDENT VIEW ================= -->
+  <section class="view active" id="view-student">
+    <div class="student-layout">
+      <div class="card-stage">
+        <div class="lanyard"></div>
+        <div class="idcard" id="idcard">
+          <div class="idcard-top">
+            <span><span class="idcard-status-dot" id="cardDot"></span>SAFEPULSE ID</span>
+            <span id="cardStatusText">ACTIVE</span>
+          </div>
+          <div class="idcard-photo">MS</div>
+          <div class="idcard-name">Maria Santos</div>
+          <div class="idcard-meta">Grade 9 – Sampaguita · Riverside National High School</div>
+          <div class="idcard-id">ID NO. SP-2026-00417</div>
+
+          <div class="panic-wrap">
+            <button class="panic-btn" id="panicBtn">
+              <div class="core">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 3 7v6c0 5 4 8.5 9 9 5-.5 9-4 9-9V7l-9-5Z"/></svg>
+                HOLD
+              </div>
+            </button>
+            <div class="panic-hint" id="panicHint">Press and hold 1.5s — this will ask for mic &amp; location access</div>
+            <button class="stop-btn" id="stopBtn"><span class="rdot"></span> Stop &amp; send alert</button>
+          </div>
+        </div>
+        <button class="reset-link" id="resetBtn" style="display:none;">Reset simulation</button>
+      </div>
+
+      <div class="status-col">
+        <div class="panel">
+          <h3>Alert status <span class="badge idle" id="statusBadge">Idle</span></h3>
+          <div class="empty-note" id="statusEmpty">No emergency has been triggered yet. Holding the button will request your microphone and GPS, then start real recording — press "Stop &amp; send alert" when done.</div>
+          <div id="statusActive" style="display:none;">
+            <div class="rec-label" id="recLabel"><span class="rec-dot"></span> Recording live audio…</div>
+            <div class="waveform" id="waveform"></div>
+            <div class="meta-line"><span>Alert time</span><span id="alertTime">—</span></div>
+            <div class="meta-line"><span>Location</span><span id="alertLoc">Fetching GPS…</span></div>
+            <div class="meta-line"><span>Elapsed</span><span id="alertElapsed">0:00</span></div>
+          </div>
+        </div>
+
+        <div class="panel" id="contactsPanel" style="display:none;">
+          <h3>Designated contacts notified</h3>
+          <div class="contact-row"><div class="contact-name"><span class="contact-dot"></span>Adviser – Mr. Reyes</div><span class="contact-check">✓ delivered</span></div>
+          <div class="contact-row"><div class="contact-name"><span class="contact-dot"></span>Guidance Office</div><span class="contact-check">✓ delivered</span></div>
+          <div class="contact-row"><div class="contact-name"><span class="contact-dot"></span>Parent – Mrs. Santos</div><span class="contact-check">✓ delivered</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= ADMIN VIEW ================= -->
+  <section class="view" id="view-admin">
+    <div class="admin-layout">
+      <div class="feed">
+        <div class="feed-head">Incident feed <span class="feed-count" id="feedCount">0 total</span></div>
+        <div class="feed-list" id="feedList">
+          <div class="feed-empty">No incidents reported yet.<br>Trigger a real alert from the Student Device tab to see it appear here with your live audio and location.</div>
+        </div>
+      </div>
+      <div class="detail" id="detailPanel">
+        <div class="detail-empty">Select an incident from the feed to view real location, real recorded audio, and response status.</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="footnote">Prototype for research purposes. Audio is recorded from your device microphone and kept only in this browser tab (never uploaded); location comes from your device's real GPS/network location via the browser's Geolocation API. Built to demonstrate the Safepulse ID system described in Chapter I of the study.</div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+let incidents = [];
+let selectedId = null;
+let holdTimer=null, holdStart=null;
+const HOLD_MS = 1500;
+
+let mediaStream=null, mediaRecorder=null, chunks=[];
+let audioCtx=null, analyser=null, dataArray=null, rafId=null;
+let recStartTime=null, elapsedTimer=null;
+let currentCoords=null;
+
+// ---------------- Tabs ----------------
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('view-'+btn.dataset.view).classList.add('active');
+  });
+});
+
+const panicBtn = document.getElementById('panicBtn');
+const idcard = document.getElementById('idcard');
+const panicHint = document.getElementById('panicHint');
+const stopBtn = document.getElementById('stopBtn');
+const resetBtn = document.getElementById('resetBtn');
+
+function setProgress(p){ panicBtn.style.setProperty('--p', p); }
+
+function startHold(e){
+  e.preventDefault();
+  if(idcard.classList.contains('triggered')) return;
+  holdStart = Date.now();
+  panicHint.textContent = 'Keep holding…';
+  holdTimer = setInterval(()=>{
+    const elapsed = Date.now()-holdStart;
+    setProgress(Math.min(100,(elapsed/HOLD_MS)*100));
+    if(elapsed>=HOLD_MS){
+      clearInterval(holdTimer);
+      armAlert();
+    }
+  },30);
+}
+function cancelHold(){
+  if(holdTimer){clearInterval(holdTimer);holdTimer=null;}
+  if(!idcard.classList.contains('triggered')){
+    setProgress(0);
+    panicHint.textContent = 'Press and hold 1.5s — this will ask for mic & location access';
+  }
+}
+panicBtn.addEventListener('pointerdown',startHold);
+panicBtn.addEventListener('pointerup',cancelHold);
+panicBtn.addEventListener('pointerleave',cancelHold);
+resetBtn.addEventListener('click',()=>location.reload());
+
+// ---------------- Arm real alert: get GPS + mic ----------------
+async function armAlert(){
+  idcard.classList.add('triggered');
+  document.getElementById('cardStatusText').textContent = 'ARMING…';
+  panicHint.textContent = 'Requesting permissions…';
+  document.getElementById('statusEmpty').style.display='none';
+  document.getElementById('statusActive').style.display='block';
+  document.getElementById('statusBadge').textContent='Arming';
+  document.getElementById('statusBadge').className='badge progress';
+
+  // 1. Location
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(pos=>{
+      currentCoords = {lat:pos.coords.latitude, lng:pos.coords.longitude, acc:pos.coords.accuracy};
+      document.getElementById('alertLoc').textContent = currentCoords.lat.toFixed(5)+', '+currentCoords.lng.toFixed(5)+' (±'+Math.round(currentCoords.acc)+'m)';
+    }, err=>{
+      document.getElementById('alertLoc').textContent = 'Unavailable ('+err.message+')';
+    }, {enableHighAccuracy:true, timeout:10000});
+  } else {
+    document.getElementById('alertLoc').textContent = 'Geolocation not supported';
+  }
+
+  // 2. Microphone
+  try{
+    mediaStream = await navigator.mediaDevices.getUserMedia({audio:true});
+  }catch(err){
+    document.getElementById('cardStatusText').textContent = 'MIC BLOCKED';
+    document.getElementById('statusBadge').textContent='Error';
+    document.getElementById('statusBadge').className='badge err';
+    const note=document.createElement('div');
+    note.className='err-note';
+    note.textContent='Microphone access was blocked or unavailable: '+err.message+'. Check site permissions and reload.';
+    document.getElementById('statusActive').appendChild(note);
+    panicHint.textContent='Microphone permission denied';
+    return;
+  }
+
+  startRecording();
+}
+
+function startRecording(){
+  chunks=[];
+  mediaRecorder = new MediaRecorder(mediaStream);
+  mediaRecorder.ondataavailable = e=>{ if(e.data.size>0) chunks.push(e.data); };
+  mediaRecorder.onstop = finalizeIncident;
+  mediaRecorder.start();
+
+  document.getElementById('cardStatusText').textContent = 'ALERT SENT';
+  document.getElementById('statusBadge').textContent='Recording';
+  document.getElementById('statusBadge').className='badge new';
+  panicHint.textContent = 'Live alert in progress';
+  stopBtn.classList.add('show');
+
+  recStartTime = Date.now();
+  document.getElementById('alertTime').textContent = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  elapsedTimer = setInterval(()=>{
+    const s = Math.floor((Date.now()-recStartTime)/1000);
+    document.getElementById('alertElapsed').textContent = Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
+  },500);
+
+  // live waveform from real mic input
+  audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+  const src = audioCtx.createMediaStreamSource(mediaStream);
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 128;
+  dataArray = new Uint8Array(analyser.frequencyBinCount);
+  src.connect(analyser);
+
+  const wf = document.getElementById('waveform');
+  wf.innerHTML='';
+  const barCount = 46;
+  for(let i=0;i<barCount;i++){
+    const b=document.createElement('div'); b.className='bar'; wf.appendChild(b);
+  }
+  const bars = wf.querySelectorAll('.bar');
+
+  function draw(){
+    analyser.getByteFrequencyData(dataArray);
+    const step = Math.floor(dataArray.length/bars.length);
+    bars.forEach((b,i)=>{
+      const v = dataArray[i*step]||0;
+      b.style.height = Math.max(3,(v/255)*36)+'px';
+    });
+    rafId = requestAnimationFrame(draw);
+  }
+  draw();
+
+  // contacts notified sequence
+  document.getElementById('contactsPanel').style.display='block';
+  document.querySelectorAll('#contactsPanel .contact-row').forEach((row,i)=>{
+    setTimeout(()=>{
+      row.querySelector('.contact-dot').classList.add('sent');
+      row.querySelector('.contact-check').classList.add('show');
+    }, 500+i*650);
+  });
+}
+
+stopBtn.addEventListener('click',()=>{
+  if(mediaRecorder && mediaRecorder.state!=='inactive') mediaRecorder.stop();
+  if(rafId) cancelAnimationFrame(rafId);
+  if(elapsedTimer) clearInterval(elapsedTimer);
+  if(mediaStream) mediaStream.getTracks().forEach(t=>t.stop());
+  stopBtn.classList.remove('show');
+  document.getElementById('recLabel').innerHTML='<span style="color:var(--safe)">●</span> Recording saved as evidence';
+  document.getElementById('recLabel').style.color='var(--safe)';
+});
+
+function finalizeIncident(){
+  const blob = new Blob(chunks, {type:'audio/webm'});
+  const url = URL.createObjectURL(blob);
+  const now = new Date();
+  const incident = {
+    id: Date.now(),
+    name:'Maria Santos',
+    section:'Grade 9 – Sampaguita',
+    time: now.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}),
+    date: now.toLocaleDateString(),
+    coords: currentCoords,
+    status:'new',
+    audioUrl: url,
+    duration: Math.floor((Date.now()-recStartTime)/1000)
+  };
+  incidents.unshift(incident);
+  renderFeed();
+}
+
+// ---------------- Admin feed ----------------
+function renderFeed(){
+  const list = document.getElementById('feedList');
+  document.getElementById('feedCount').textContent = incidents.length+' total';
+  if(incidents.length===0){
+    list.innerHTML='<div class="feed-empty">No incidents reported yet.<br>Trigger a real alert from the Student Device tab to see it appear here with your live audio and location.</div>';
+    return;
+  }
+  list.innerHTML='';
+  incidents.forEach(inc=>{
+    const el=document.createElement('div');
+    el.className='feed-item'+(inc.id===selectedId?' selected':'');
+    el.innerHTML=`
+      <div class="feed-item-top"><span class="feed-item-name">${inc.name}</span><span class="feed-item-time">${inc.time}</span></div>
+      <span class="badge ${inc.status==='new'?'new':inc.status==='progress'?'progress':'resolved'}">${inc.status==='new'?'New':inc.status==='progress'?'In progress':'Resolved'}</span>
+    `;
+    el.addEventListener('click',()=>{selectedId=inc.id; renderFeed(); renderDetail();});
+    list.appendChild(el);
+  });
+}
+
+let leafletMap=null;
+function renderDetail(){
+  const panel = document.getElementById('detailPanel');
+  const inc = incidents.find(i=>i.id===selectedId);
+  if(!inc){ panel.innerHTML='<div class="detail-empty">Select an incident from the feed to view real location, real recorded audio, and response status.</div>'; return; }
+
+  const hasCoords = !!inc.coords;
+  panel.innerHTML=`
+    <div class="detail-head">
+      <div>
+        <div class="detail-name">${inc.name}</div>
+        <div class="detail-sub">${inc.section} · Alert received ${inc.time}, ${inc.date}</div>
+      </div>
+      <div class="status-actions">
+        <button class="status-btn ${inc.status==='progress'?'active-pending':''}" data-a="progress">In progress</button>
+        <button class="status-btn ${inc.status==='resolved'?'active-resolved':''}" data-a="resolved">Resolved</button>
+      </div>
+    </div>
+    <div class="grid-two">
+      <div class="info-block">
+        <h4>Live location</h4>
+        ${hasCoords ? '<div id="mapbox"></div><div class="coords">'+inc.coords.lat.toFixed(5)+', '+inc.coords.lng.toFixed(5)+' · accuracy ±'+Math.round(inc.coords.acc)+'m</div>'
+                    : '<div class="err-note">Location was unavailable for this alert.</div>'}
+      </div>
+      <div class="info-block">
+        <h4>Audio evidence — ${inc.duration}s</h4>
+        <audio controls src="${inc.audioUrl}"></audio>
+      </div>
+    </div>
+    <div class="info-block" style="margin-top:16px;">
+      <h4>Notified contacts</h4>
+      <span class="contact-chip">✓ Adviser – Mr. Reyes</span>
+      <span class="contact-chip">✓ Guidance Office</span>
+      <span class="contact-chip">✓ Parent – Mrs. Santos</span>
+    </div>
+  `;
+
+  panel.querySelectorAll('.status-btn').forEach(btn=>{
+    btn.addEventListener('click',()=>{ inc.status = btn.dataset.a; renderFeed(); renderDetail(); });
+  });
+
+  if(hasCoords){
+    setTimeout(()=>{
+      if(leafletMap){ leafletMap.remove(); leafletMap=null; }
+      leafletMap = L.map('mapbox', {zoomControl:false, attributionControl:false}).setView([inc.coords.lat, inc.coords.lng], 16);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(leafletMap);
+      L.circleMarker([inc.coords.lat, inc.coords.lng], {radius:9, color:'#E8452F', fillColor:'#E8452F', fillOpacity:0.9}).addTo(leafletMap);
+    }, 30);
+  }
+}
+</script>
+</body>
+</html>
